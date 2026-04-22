@@ -1,7 +1,7 @@
 import { ItemView, WorkspaceLeaf, TFile, parseYaml } from 'obsidian'
 import { parsePour } from '../parser/pour'
 import { parseBean } from '../parser/bean'
-import { Recipe, Section, Step } from '../parser/types'
+import { Recipe, Step } from '../parser/types'
 
 export const VIEW_TYPE_BREW_SHEET = 'coffeelang-brew-sheet'
 
@@ -30,7 +30,9 @@ export class BrewSheetView extends ItemView {
     const beanRefMatch = text.match(/^bean:\s*(.+)$/m)
     if (beanRefMatch) {
       const beanPath = beanRefMatch[1].trim().replace(/^["']|["']$/g, '')
-      const folder = file.parent?.path ?? ''
+      const parentPath = file.parent?.path ?? ''
+      // Obsidian returns "/" for vault root — treat that as empty
+      const folder = parentPath === '/' ? '' : parentPath
       const fullPath = folder ? `${folder}/${beanPath}` : beanPath
       const beanFile = this.app.vault.getAbstractFileByPath(fullPath)
       if (beanFile instanceof TFile) {
@@ -63,13 +65,11 @@ export class BrewSheetView extends ItemView {
     const bean = recipe.bean
     if (bean) {
       const strip = sheet.createEl('div', { cls: 'bean-strip' })
-
       const top = strip.createEl('div', { cls: 'bean-strip-top' })
+
       const nameBlock = top.createEl('div', { cls: 'bean-strip-name-block' })
-      nameBlock.createEl('span', { cls: 'bean-strip-name', text: bean.name ?? '' })
-      if (bean.roastery) {
-        nameBlock.createEl('span', { cls: 'bean-strip-roastery', text: bean.roastery })
-      }
+      if (bean.name) nameBlock.createEl('span', { cls: 'bean-strip-name', text: bean.name })
+      if (bean.roastery) nameBlock.createEl('span', { cls: 'bean-strip-roastery', text: bean.roastery })
 
       const badges = top.createEl('div', { cls: 'bean-strip-badges' })
       if (bean.process) badges.createEl('span', { cls: 'bean-badge process', text: bean.process })
@@ -82,22 +82,22 @@ export class BrewSheetView extends ItemView {
         }
       }
     } else if (recipe.beanRef) {
-      // Bean ref exists but didn't resolve
-      sheet.createEl('div', { cls: 'bean-strip bean-strip-missing', text: `⚠ Bean file not found: ${recipe.beanRef}` })
+      sheet.createEl('div', {
+        cls: 'bean-strip bean-strip-missing',
+        text: `⚠ Bean file not found: ${recipe.beanRef}`,
+      })
     }
 
     // ── Brew params ───────────────────────────────────────────
     if (recipe.brew) {
       const brew = recipe.brew
       const params = sheet.createEl('div', { cls: 'brew-params' })
-
       const addParam = (label: string, value: string | undefined) => {
         if (!value) return
         const cell = params.createEl('div', { cls: 'brew-param-cell' })
         cell.createEl('div', { cls: 'param-value', text: value })
         cell.createEl('div', { cls: 'param-label', text: label })
       }
-
       if (brew.doseG != null) addParam('Dose', `${brew.doseG}g`)
       if (brew.yieldG != null) addParam('Yield', `${brew.yieldG}g`)
       if (brew.ratio) addParam('Ratio', brew.ratio)
@@ -107,8 +107,6 @@ export class BrewSheetView extends ItemView {
     }
 
     // ── Sections ──────────────────────────────────────────────
-    let cumulativeWater = 0
-
     // Count total pours for the ✓ marker
     let totalPours = 0
     for (const s of recipe.sections) {
@@ -117,21 +115,15 @@ export class BrewSheetView extends ItemView {
       }
     }
 
+    const state = { cumulativeWater: 0 }
+
     for (const section of recipe.sections) {
       const sectionEl = sheet.createEl('div', { cls: 'brew-section' })
-
       if (section.name) {
         sectionEl.createEl('div', { cls: 'brew-section-header', text: section.name })
       }
-
       const stepsEl = sectionEl.createEl('div', { cls: 'brew-steps' })
-
-      for (const step of section.steps) {
-        if (step.type === 'waterPour') {
-          cumulativeWater = step.cumulative ? step.amountG : cumulativeWater + step.amountG
-        }
-        renderStep(stepsEl, step, cumulativeWater, totalPours)
-      }
+      this.renderSteps(stepsEl, section.steps, state, totalPours)
     }
 
     // ── Warnings ──────────────────────────────────────────────
@@ -142,76 +134,118 @@ export class BrewSheetView extends ItemView {
       }
     }
   }
-}
 
-function renderStep(
-  parent: HTMLElement,
-  step: Step,
-  cumulativeWater: number,
-  totalPours: number
-): void {
-  switch (step.type) {
-    case 'waterPour': {
-      const row = parent.createEl('div', { cls: 'brew-step step-pour' })
-      const left = row.createEl('div', { cls: 'pour-left' })
-      left.createEl('span', { cls: 'pour-dot' })
-      if (step.name) left.createEl('span', { cls: 'pour-name', text: step.name })
+  private renderSteps(
+    el: HTMLElement,
+    steps: Step[],
+    state: { cumulativeWater: number },
+    totalPours: number
+  ): void {
+    // Accumulate prose-type tokens (text, equipment, beanRef) into paragraphs.
+    // Flush when a structural step (pour, timer, note, tech) is hit.
+    // Text that immediately follows a pour/timer on the same conceptual line
+    // (trailing annotation) is dropped — the pour card has the key info.
+    let proseParts: string[] = []
+    let lastWasStructural = false
 
-      const mid = row.createEl('div', { cls: 'pour-mid' })
-      mid.createEl('span', { cls: 'pour-amount', text: `${step.amountG}g` })
-      if (step.tempC != null) {
-        mid.createEl('span', { cls: 'pour-temp', text: `@ ${Math.round(step.tempC)}°C` })
+    const flushProse = () => {
+      const text = proseParts
+        .map(p => p.replace(/^[-—\s]+/, '').trim())
+        .filter(Boolean)
+        .join(' ')
+        .replace(/\s{2,}/g, ' ')
+        .trim()
+      if (text) {
+        el.createEl('div', { cls: 'brew-step step-text', text })
       }
-
-      const right = row.createEl('div', { cls: 'pour-right' })
-      const isLast = step.sequence === totalPours
-      right.createEl('span', { cls: 'pour-total', text: `→ ${cumulativeWater}g` })
-      if (isLast) right.createEl('span', { cls: 'pour-check', text: '✓' })
-      break
+      proseParts = []
     }
 
-    case 'timer': {
-      const row = parent.createEl('div', { cls: 'brew-step step-timer' })
-      row.createEl('span', { cls: 'timer-icon', text: '⏱' })
-      const label = step.name ? `${step.name}  ` : ''
-      row.createEl('span', { cls: 'timer-text', text: `${label}${formatDuration(step.totalSecs)}` })
-      break
-    }
+    for (const step of steps) {
+      switch (step.type) {
+        case 'text': {
+          const t = step.value.trim()
+          // Drop short trailing fragments after a pour/timer (e.g. "— bloom phase…")
+          if (lastWasStructural && t.match(/^[-—]/)) break
+          if (t) proseParts.push(t)
+          lastWasStructural = false
+          break
+        }
+        case 'equipment':
+          // Skip equipment refs in preview — noise
+          lastWasStructural = false
+          break
+        case 'beanRef':
+          // Skip bean refs in preview
+          lastWasStructural = false
+          break
+        case 'inlineMetadata':
+          lastWasStructural = false
+          break
+        case 'grindSpec':
+          // Fold grind spec into prose if we're mid-paragraph, else own line
+          if (proseParts.length > 0) {
+            proseParts.push(step.description)
+            lastWasStructural = false
+          } else {
+            flushProse()
+            const row = el.createEl('div', { cls: 'brew-step step-grind' })
+            row.createEl('span', { cls: 'grind-icon', text: '⚙' })
+            row.createEl('span', { text: step.description })
+            lastWasStructural = true
+          }
+          break
+        case 'waterPour': {
+          flushProse()
+          state.cumulativeWater = step.cumulative
+            ? step.amountG
+            : state.cumulativeWater + step.amountG
 
-    case 'note': {
-      const row = parent.createEl('div', { cls: 'brew-step step-note' })
-      row.createEl('span', { text: step.value })
-      break
-    }
+          const row = el.createEl('div', { cls: 'brew-step step-pour' })
+          const left = row.createEl('div', { cls: 'pour-left' })
+          left.createEl('span', { cls: 'pour-dot' })
+          if (step.name) left.createEl('span', { cls: 'pour-name', text: step.name })
 
-    case 'text': {
-      const trimmed = step.value.trim()
-      if (trimmed) {
-        const row = parent.createEl('div', { cls: 'brew-step step-text' })
-        row.createEl('span', { text: trimmed })
+          const mid = row.createEl('div', { cls: 'pour-mid' })
+          mid.createEl('span', { cls: 'pour-amount', text: `${step.amountG}g` })
+          if (step.tempC != null) {
+            mid.createEl('span', { cls: 'pour-temp', text: `@ ${Math.round(step.tempC)}°C` })
+          }
+
+          const right = row.createEl('div', { cls: 'pour-right' })
+          right.createEl('span', { cls: 'pour-total', text: `→ ${state.cumulativeWater}g` })
+          if (step.sequence === totalPours) {
+            right.createEl('span', { cls: 'pour-check', text: '✓' })
+          }
+          lastWasStructural = true
+          break
+        }
+        case 'timer': {
+          flushProse()
+          const row = el.createEl('div', { cls: 'brew-step step-timer' })
+          row.createEl('span', { cls: 'timer-icon', text: '⏱' })
+          const label = step.name ? `${step.name}  ` : ''
+          row.createEl('span', { cls: 'timer-text', text: `${label}${formatDuration(step.totalSecs)}` })
+          lastWasStructural = true
+          break
+        }
+        case 'note': {
+          flushProse()
+          el.createEl('div', { cls: 'brew-step step-note', text: step.value })
+          lastWasStructural = false
+          break
+        }
+        case 'technique': {
+          flushProse()
+          const row = el.createEl('div', { cls: 'brew-step step-tech' })
+          row.createEl('span', { cls: 'tech-name', text: step.name })
+          if (step.detail) row.createEl('span', { cls: 'tech-detail', text: ` — ${step.detail}` })
+          lastWasStructural = true
+          break
+        }
       }
-      break
     }
-
-    case 'technique': {
-      const row = parent.createEl('div', { cls: 'brew-step step-tech' })
-      row.createEl('span', { cls: 'tech-name', text: step.name })
-      if (step.detail) row.createEl('span', { cls: 'tech-detail', text: ` — ${step.detail}` })
-      break
-    }
-
-    case 'grindSpec': {
-      const row = parent.createEl('div', { cls: 'brew-step step-grind' })
-      row.createEl('span', { cls: 'grind-icon', text: '⚙' })
-      row.createEl('span', { text: step.description })
-      break
-    }
-
-    case 'equipment':
-    case 'beanRef':
-    case 'inlineMetadata':
-      // Skip these in the rendered view — they're editor-level detail
-      break
+    flushProse()
   }
 }
 
