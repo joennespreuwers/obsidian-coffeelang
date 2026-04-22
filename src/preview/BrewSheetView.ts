@@ -1,6 +1,5 @@
-import { ItemView, WorkspaceLeaf, TFile, parseYaml } from 'obsidian'
+import { ItemView, WorkspaceLeaf, TFile, ViewStateResult, parseYaml } from 'obsidian'
 import { parsePour } from '../parser/pour'
-import { parseBean } from '../parser/bean'
 import { Recipe, Step } from '../parser/types'
 
 export const VIEW_TYPE_BREW_SHEET = 'coffeelang-brew-sheet'
@@ -16,22 +15,38 @@ export class BrewSheetView extends ItemView {
   getDisplayText(): string { return this.file ? this.file.basename : 'Brew sheet' }
   getIcon(): string { return 'coffee' }
 
+  getState(): Record<string, unknown> {
+    return { file: this.file?.path ?? '' }
+  }
+
+  async setState(state: unknown, result: ViewStateResult): Promise<void> {
+    const s = state as { file?: string }
+    if (s?.file) {
+      const f = this.app.vault.getAbstractFileByPath(s.file)
+      if (f instanceof TFile) await this.setFile(f)
+    }
+    await super.setState(state, result)
+  }
+
   async onOpen(): Promise<void> {
     this.containerEl.empty()
     this.containerEl.addClass('coffeelang-view')
+    // "Edit source" action in the pane header
+    this.addAction('pencil', 'Edit source', () => {
+      if (this.file) this.app.workspace.getLeaf('split').openFile(this.file)
+    })
   }
 
   async setFile(file: TFile): Promise<void> {
     this.file = file
     const text = await this.app.vault.read(file)
 
-    // Pre-load bean file asynchronously before parsing
+    // Pre-load bean file before parsing (vault reads are async)
     const beanCache: Record<string, string> = {}
     const beanRefMatch = text.match(/^bean:\s*(.+)$/m)
     if (beanRefMatch) {
       const beanPath = beanRefMatch[1].trim().replace(/^["']|["']$/g, '')
       const parentPath = file.parent?.path ?? ''
-      // Obsidian returns "/" for vault root — treat that as empty
       const folder = parentPath === '/' ? '' : parentPath
       const fullPath = folder ? `${folder}/${beanPath}` : beanPath
       const beanFile = this.app.vault.getAbstractFileByPath(fullPath)
@@ -40,10 +55,7 @@ export class BrewSheetView extends ItemView {
       }
     }
 
-    const resolveBean = (beanPath: string): string | null =>
-      beanCache[beanPath] ?? null
-
-    const recipe = parsePour(text, parseYaml, resolveBean)
+    const recipe = parsePour(text, parseYaml, (p) => beanCache[p] ?? null)
     this.render(recipe)
   }
 
@@ -92,22 +104,21 @@ export class BrewSheetView extends ItemView {
     if (recipe.brew) {
       const brew = recipe.brew
       const params = sheet.createEl('div', { cls: 'brew-params' })
-      const addParam = (label: string, value: string | undefined) => {
+      const add = (label: string, value: string | undefined) => {
         if (!value) return
-        const cell = params.createEl('div', { cls: 'brew-param-cell' })
-        cell.createEl('div', { cls: 'param-value', text: value })
-        cell.createEl('div', { cls: 'param-label', text: label })
+        const c = params.createEl('div', { cls: 'brew-param-cell' })
+        c.createEl('div', { cls: 'param-value', text: value })
+        c.createEl('div', { cls: 'param-label', text: label })
       }
-      if (brew.doseG != null) addParam('Dose', `${brew.doseG}g`)
-      if (brew.yieldG != null) addParam('Yield', `${brew.yieldG}g`)
-      if (brew.ratio) addParam('Ratio', brew.ratio)
-      if (brew.waterTempC != null) addParam('Temp', `${Math.round(brew.waterTempC)}°C`)
-      if (brew.brewTimeSec != null) addParam('Time', formatDuration(brew.brewTimeSec))
-      if (brew.grindSize) addParam('Grind', brew.grindSize)
+      if (brew.doseG != null)      add('Dose',  `${brew.doseG}g`)
+      if (brew.yieldG != null)     add('Yield', `${brew.yieldG}g`)
+      if (brew.ratio)              add('Ratio', brew.ratio)
+      if (brew.waterTempC != null) add('Temp',  `${Math.round(brew.waterTempC)}°C`)
+      if (brew.brewTimeSec != null) add('Time', formatDuration(brew.brewTimeSec))
+      if (brew.grindSize)          add('Grind', brew.grindSize)
     }
 
-    // ── Sections ──────────────────────────────────────────────
-    // Count total pours for the ✓ marker
+    // Count total pours for ✓ marker
     let totalPours = 0
     for (const s of recipe.sections) {
       for (const step of s.steps) {
@@ -115,7 +126,8 @@ export class BrewSheetView extends ItemView {
       }
     }
 
-    const state = { cumulativeWater: 0 }
+    // ── Sections ──────────────────────────────────────────────
+    const state = { cumulativeWater: 0, stepNum: 0 }
 
     for (const section of recipe.sections) {
       const sectionEl = sheet.createEl('div', { cls: 'brew-section' })
@@ -138,109 +150,108 @@ export class BrewSheetView extends ItemView {
   private renderSteps(
     el: HTMLElement,
     steps: Step[],
-    state: { cumulativeWater: number },
+    state: { cumulativeWater: number; stepNum: number },
     totalPours: number
   ): void {
-    // Accumulate prose-type tokens (text, equipment, beanRef) into paragraphs.
-    // Flush when a structural step (pour, timer, note, tech) is hit.
-    // Text that immediately follows a pour/timer on the same conceptual line
-    // (trailing annotation) is dropped — the pour card has the key info.
+    // Accumulate prose tokens (text, equipment, beanRef) into a single step card.
+    // Equipment and beanRef names are included inline so prose reads naturally.
+    // Flush prose as a numbered card when a structural step is hit.
     let proseParts: string[] = []
-    let lastWasStructural = false
 
     const flushProse = () => {
       const text = proseParts
-        .map(p => p.replace(/^[-—\s]+/, '').trim())
         .filter(Boolean)
         .join(' ')
         .replace(/\s{2,}/g, ' ')
+        .replace(/\s([.,])/g, '$1')
         .trim()
-      if (text) {
-        el.createEl('div', { cls: 'brew-step step-text', text })
-      }
       proseParts = []
+      if (!text) return
+      state.stepNum++
+      const card = el.createEl('div', { cls: 'brew-step-card step-text' })
+      card.createEl('div', { cls: 'step-num', text: String(state.stepNum) })
+      card.createEl('div', { cls: 'step-body', text })
     }
 
     for (const step of steps) {
       switch (step.type) {
+
         case 'text': {
-          const t = step.value.trim()
-          // Drop short trailing fragments after a pour/timer (e.g. "— bloom phase…")
-          if (lastWasStructural && t.match(/^[-—]/)) break
+          // Drop short trailing fragments that are annotations on a pour line (start with —)
+          const t = step.value.replace(/^[-—\s]+/, '').trim()
           if (t) proseParts.push(t)
-          lastWasStructural = false
           break
         }
+
         case 'equipment':
-          // Skip equipment refs in preview — noise
-          lastWasStructural = false
+          // Include equipment name naturally in prose
+          proseParts.push(step.name)
           break
+
         case 'beanRef':
-          // Skip bean refs in preview
-          lastWasStructural = false
+          // Include bean name (+ amount if present) in prose
+          proseParts.push(step.amountG != null ? `${step.name} (${step.amountG}g)` : step.name)
           break
-        case 'inlineMetadata':
-          lastWasStructural = false
-          break
+
         case 'grindSpec':
-          // Fold grind spec into prose if we're mid-paragraph, else own line
-          if (proseParts.length > 0) {
-            proseParts.push(step.description)
-            lastWasStructural = false
-          } else {
-            flushProse()
-            const row = el.createEl('div', { cls: 'brew-step step-grind' })
-            row.createEl('span', { cls: 'grind-icon', text: '⚙' })
-            row.createEl('span', { text: step.description })
-            lastWasStructural = true
-          }
+          proseParts.push(step.description)
           break
+
+        case 'inlineMetadata':
+          break
+
         case 'waterPour': {
           flushProse()
           state.cumulativeWater = step.cumulative
             ? step.amountG
             : state.cumulativeWater + step.amountG
+          state.stepNum++
 
-          const row = el.createEl('div', { cls: 'brew-step step-pour' })
-          const left = row.createEl('div', { cls: 'pour-left' })
-          left.createEl('span', { cls: 'pour-dot' })
-          if (step.name) left.createEl('span', { cls: 'pour-name', text: step.name })
+          const card = el.createEl('div', { cls: 'brew-step-card step-pour' })
 
-          const mid = row.createEl('div', { cls: 'pour-mid' })
-          mid.createEl('span', { cls: 'pour-amount', text: `${step.amountG}g` })
+          const numEl = card.createEl('div', { cls: 'step-num pour-num' })
+          numEl.createEl('span', { cls: 'pour-dot-inner' })
+
+          const body = card.createEl('div', { cls: 'step-body pour-body' })
+          if (step.name) body.createEl('span', { cls: 'pour-name', text: step.name })
+          body.createEl('span', { cls: 'pour-amount', text: `${step.amountG}g` })
           if (step.tempC != null) {
-            mid.createEl('span', { cls: 'pour-temp', text: `@ ${Math.round(step.tempC)}°C` })
+            body.createEl('span', { cls: 'pour-temp', text: `@ ${Math.round(step.tempC)}°C` })
           }
 
-          const right = row.createEl('div', { cls: 'pour-right' })
+          const right = card.createEl('div', { cls: 'step-right' })
           right.createEl('span', { cls: 'pour-total', text: `→ ${state.cumulativeWater}g` })
           if (step.sequence === totalPours) {
             right.createEl('span', { cls: 'pour-check', text: '✓' })
           }
-          lastWasStructural = true
           break
         }
+
         case 'timer': {
           flushProse()
-          const row = el.createEl('div', { cls: 'brew-step step-timer' })
-          row.createEl('span', { cls: 'timer-icon', text: '⏱' })
-          const label = step.name ? `${step.name}  ` : ''
-          row.createEl('span', { cls: 'timer-text', text: `${label}${formatDuration(step.totalSecs)}` })
-          lastWasStructural = true
+          state.stepNum++
+          const card = el.createEl('div', { cls: 'brew-step-card step-timer' })
+          card.createEl('div', { cls: 'step-num timer-num', text: String(state.stepNum) })
+          const body = card.createEl('div', { cls: 'step-body' })
+          body.createEl('span', { cls: 'timer-icon', text: '⏱' })
+          body.createEl('span', { cls: 'timer-text', text: formatDuration(step.totalSecs) })
           break
         }
-        case 'note': {
+
+        case 'note':
+          // Notes are not numbered — they appear as asides between cards
           flushProse()
-          el.createEl('div', { cls: 'brew-step step-note', text: step.value })
-          lastWasStructural = false
+          el.createEl('div', { cls: 'brew-note', text: step.value })
           break
-        }
+
         case 'technique': {
           flushProse()
-          const row = el.createEl('div', { cls: 'brew-step step-tech' })
-          row.createEl('span', { cls: 'tech-name', text: step.name })
-          if (step.detail) row.createEl('span', { cls: 'tech-detail', text: ` — ${step.detail}` })
-          lastWasStructural = true
+          state.stepNum++
+          const card = el.createEl('div', { cls: 'brew-step-card step-tech' })
+          card.createEl('div', { cls: 'step-num', text: String(state.stepNum) })
+          const body = card.createEl('div', { cls: 'step-body' })
+          body.createEl('span', { cls: 'tech-name', text: step.name })
+          if (step.detail) body.createEl('span', { cls: 'tech-detail', text: ` — ${step.detail}` })
           break
         }
       }

@@ -1,27 +1,48 @@
-import { Plugin, TFile, WorkspaceLeaf } from 'obsidian'
+import { Plugin, TFile } from 'obsidian'
 import { VIEW_TYPE_BREW_SHEET, BrewSheetView } from './preview/BrewSheetView'
 import { VIEW_TYPE_BEAN_CARD, BeanCardView } from './preview/BeanCardView'
 import { createCoffeelangExtension } from './editor/CoffeelangHighlighter'
 
 export default class CoffeelangPlugin extends Plugin {
   async onload() {
-    // 1. Register views
+    // Register views
     this.registerView(VIEW_TYPE_BREW_SHEET, (leaf) => new BrewSheetView(leaf, this.app))
-    this.registerView(VIEW_TYPE_BEAN_CARD, (leaf) => new BeanCardView(leaf, this.app))
+    this.registerView(VIEW_TYPE_BEAN_CARD,  (leaf) => new BeanCardView(leaf, this.app))
 
-    // 2. Register syntax highlighting
+    // Syntax highlighting for the text editor
     this.registerEditorExtension(createCoffeelangExtension(this.app))
 
-    // 3. Register file extensions so Obsidian opens them in the editor
+    // Register file extensions — Obsidian opens them as text by default
     this.registerExtensions(['pour', 'bean'], 'markdown')
 
-    // 4. Ribbon icon — opens preview for active file
+    // Auto-render: when a .pour or .bean file is opened in a markdown leaf,
+    // replace that leaf with our rendered view automatically.
+    this.registerEvent(
+      this.app.workspace.on('file-open', async (file) => {
+        if (!file) return
+        if (file.extension !== 'pour' && file.extension !== 'bean') return
+
+        const leaf = this.app.workspace.getMostRecentLeaf()
+        if (!leaf) return
+
+        // Only replace markdown leaves — don't interfere if already our view
+        if (leaf.view.getViewType() !== 'markdown') return
+
+        const viewType = file.extension === 'pour' ? VIEW_TYPE_BREW_SHEET : VIEW_TYPE_BEAN_CARD
+        await leaf.setViewState({
+          type: viewType,
+          state: { file: file.path },
+          active: true,
+        })
+      })
+    )
+
+    // Keep commands + ribbon as fallback
     this.addRibbonIcon('coffee', 'Open coffeelang preview', () => {
       const file = this.app.workspace.getActiveFile()
       if (file) this.openPreview(file)
     })
 
-    // 5. Commands
     this.addCommand({
       id: 'open-brew-sheet',
       name: 'Open brew sheet',
@@ -52,7 +73,7 @@ export default class CoffeelangPlugin extends Plugin {
   async openPreview(file: TFile): Promise<void> {
     const viewType = file.extension === 'pour' ? VIEW_TYPE_BREW_SHEET : VIEW_TYPE_BEAN_CARD
 
-    // Check if a view for this file already exists
+    // Reuse existing view if already open
     const existing = this.app.workspace.getLeavesOfType(viewType)
     for (const leaf of existing) {
       const view = leaf.view
@@ -63,18 +84,8 @@ export default class CoffeelangPlugin extends Plugin {
       }
     }
 
-    // Open in a new split leaf
     const leaf = this.app.workspace.getLeaf('split')
-    if (viewType === VIEW_TYPE_BREW_SHEET) {
-      await leaf.setViewState({ type: VIEW_TYPE_BREW_SHEET, active: true })
-      const view = leaf.view as BrewSheetView
-      await view.setFile(file)
-    } else {
-      await leaf.setViewState({ type: VIEW_TYPE_BEAN_CARD, active: true })
-      const view = leaf.view as BeanCardView
-      await view.setFile(file)
-    }
-
+    await leaf.setViewState({ type: viewType, state: { file: file.path }, active: true })
     this.app.workspace.revealLeaf(leaf)
   }
 
