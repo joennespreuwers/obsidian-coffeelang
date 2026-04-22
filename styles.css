@@ -1,0 +1,522 @@
+/* ============================================================
+   coffeelang Obsidian Plugin — styles.css
+   ============================================================ */
+
+.coffeelang-view {
+  padding: 2rem 2.5rem;
+  overflow-y: auto;
+  font-family: var(--font-text);
+  color: var(--text-normal);
+  height: 100%;
+  box-sizing: border-box;
+}
+
+/* ============================================================
+   Brew Sheet
+   ============================================================ */
+
+.brew-sheet {
+  max-width: 620px;
+  margin: 0 auto;
+}
+
+/* ── Header ── */
+
+.brew-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 1.25rem;
+  gap: 1rem;
+}
+
+.brew-title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  margin: 0;
+  line-height: 1.2;
+  color: var(--text-normal);
+}
+
+.brew-method-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-on-accent);
+  background: var(--color-accent);
+  border-radius: 4px;
+  padding: 0.2rem 0.6rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ── Bean strip ── */
+
+.bean-strip {
+  background: var(--background-secondary);
+  border-radius: 10px;
+  padding: 0.9rem 1.1rem;
+  margin-bottom: 1.25rem;
+  border-left: 3px solid var(--color-accent);
+}
+
+.bean-strip-missing {
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  font-style: italic;
+  border-left-color: var(--text-muted);
+}
+
+.bean-strip-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 0.6rem;
+}
+
+.bean-strip-name-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.bean-strip-name {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-normal);
+}
+
+.bean-strip-roastery {
+  font-size: 0.825rem;
+  color: var(--text-muted);
+}
+
+.bean-strip-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  justify-content: flex-end;
+  flex-shrink: 0;
+}
+
+.bean-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  border-radius: 4px;
+  padding: 0.2rem 0.55rem;
+  text-transform: capitalize;
+}
+
+.bean-badge.process {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+
+.bean-badge.roast {
+  background: var(--background-modifier-hover);
+  color: var(--text-muted);
+}
+
+.bean-strip-flavors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.flavor-tag {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--color-accent);
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 999px;
+  padding: 0.15rem 0.6rem;
+}
+
+/* ── Brew params ── */
+
+.brew-params {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1.75rem;
+}
+
+.brew-param-cell {
+  background: var(--background-secondary);
+  border-radius: 8px;
+  padding: 0.6rem 0.9rem;
+  min-width: 70px;
+  flex: 1;
+}
+
+.brew-param-cell .param-value {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text-normal);
+  line-height: 1.2;
+}
+
+.brew-param-cell .param-label {
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-muted);
+  margin-top: 0.15rem;
+}
+
+/* ── Sections ── */
+
+.brew-section {
+  margin-bottom: 1.5rem;
+}
+
+.brew-section-header {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  margin-bottom: 0.6rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+/* ── Steps ── */
+
+.brew-steps {
+  display: flex;
+  flex-direction: column;
+}
+
+.brew-step {
+  padding: 0.45rem 0;
+}
+
+/* Pour step */
+
+.step-pour {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.55rem 0.75rem;
+  margin: 0.2rem 0;
+  background: var(--background-secondary);
+  border-radius: 8px;
+}
+
+.pour-left {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.pour-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  flex-shrink: 0;
+}
+
+.pour-name {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-normal);
+  min-width: 50px;
+}
+
+.pour-mid {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.pour-amount {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-normal);
+}
+
+.pour-temp {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.pour-right {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+.pour-total {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.pour-check {
+  font-size: 0.85rem;
+  color: var(--color-green, #4caf50);
+  font-weight: 700;
+}
+
+/* Timer step */
+
+.step-timer {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.75rem;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+
+.timer-icon {
+  font-size: 0.8rem;
+  opacity: 0.7;
+}
+
+.timer-text {
+  font-style: italic;
+}
+
+/* Note step */
+
+.step-note {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  font-style: italic;
+  line-height: 1.5;
+  padding: 0.25rem 0.75rem;
+  border-left: 2px solid var(--background-modifier-border);
+  margin: 0.3rem 0;
+}
+
+/* Text step */
+
+.step-text {
+  font-size: 0.95rem;
+  color: var(--text-normal);
+  line-height: 1.5;
+  padding: 0.25rem 0;
+}
+
+/* Technique step */
+
+.step-tech {
+  font-size: 0.875rem;
+  padding: 0.25rem 0.75rem;
+}
+
+.tech-name {
+  font-weight: 600;
+  color: var(--color-accent);
+}
+
+.tech-detail {
+  color: var(--text-muted);
+}
+
+/* Grind step */
+
+.step-grind {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  padding: 0.25rem 0;
+}
+
+.grind-icon {
+  font-size: 0.8rem;
+}
+
+/* Warnings */
+
+.brew-warnings {
+  margin-top: 1.5rem;
+  padding: 0.75rem 1rem;
+  background: var(--background-modifier-error);
+  border-radius: 8px;
+}
+
+.brew-warning {
+  font-size: 0.85rem;
+  color: var(--text-error);
+  margin-bottom: 0.25rem;
+}
+
+/* ============================================================
+   Bean Card
+   ============================================================ */
+
+.bean-card {
+  max-width: 580px;
+  margin: 0 auto;
+}
+
+.bean-card-header {
+  margin-bottom: 1.25rem;
+}
+
+.bean-card-header h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  margin: 0 0 0.2rem 0;
+  color: var(--text-normal);
+}
+
+.bean-card-header .bean-roastery {
+  font-size: 1rem;
+  color: var(--text-muted);
+}
+
+.bean-card-body {
+  background: var(--background-secondary);
+  border-radius: 10px;
+  padding: 1.1rem;
+  margin-bottom: 1rem;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem 2rem;
+}
+
+.bean-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.field-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-muted);
+}
+
+.field-value {
+  font-size: 0.95rem;
+  color: var(--text-normal);
+}
+
+.bean-flavor-notes-section {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.flavor-notes-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.flavor-note {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--color-accent);
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 999px;
+  padding: 0.15rem 0.6rem;
+}
+
+.bean-card-notes {
+  margin-top: 0.25rem;
+}
+
+.bean-card-notes h3 {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  margin: 0 0 0.6rem 0;
+}
+
+.bean-card-notes p {
+  font-size: 0.95rem;
+  line-height: 1.65;
+  color: var(--text-normal);
+  margin: 0 0 0.75rem 0;
+}
+
+.bean-warnings {
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  background: var(--background-modifier-error);
+  border-radius: 8px;
+}
+
+.bean-warning {
+  font-size: 0.85rem;
+  color: var(--text-error);
+}
+
+/* ============================================================
+   CodeMirror 6 Syntax Highlighting
+   ============================================================ */
+
+.cm-coffeelang-section {
+  color: var(--color-accent);
+  font-weight: 700;
+}
+
+.cm-coffeelang-pour {
+  color: #4a9eff;
+  font-weight: 600;
+}
+
+.cm-coffeelang-timer {
+  color: #e6a817;
+  font-style: italic;
+}
+
+.cm-coffeelang-bean {
+  color: #a05c34;
+  font-weight: 500;
+}
+
+.cm-coffeelang-equip {
+  color: var(--text-muted);
+}
+
+.cm-coffeelang-grind {
+  color: #7c9e5e;
+  font-weight: 500;
+}
+
+.cm-coffeelang-tech {
+  color: var(--color-accent);
+}
+
+.cm-coffeelang-meta {
+  color: var(--text-muted);
+  font-size: 0.9em;
+}
+
+.cm-coffeelang-note {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.cm-coffeelang-comment {
+  color: var(--text-faint);
+  font-style: italic;
+}
+
+.theme-dark .cm-coffeelang-pour  { color: #6bbdff; }
+.theme-dark .cm-coffeelang-timer { color: #f5c842; }
+.theme-dark .cm-coffeelang-bean  { color: #c88050; }
+.theme-dark .cm-coffeelang-grind { color: #9bc77a; }

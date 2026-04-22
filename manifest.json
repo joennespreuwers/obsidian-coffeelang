@@ -1,0 +1,10 @@
+{
+  "id": "obsidian-coffeelang",
+  "name": "coffeelang",
+  "version": "0.1.0",
+  "minAppVersion": "1.4.0",
+  "description": "Syntax highlighting and brew sheet preview for .bean and .pour coffeelang files",
+  "author": "joennespreuwers",
+  "authorUrl": "https://github.com/joennespreuwers",
+  "isDesktopOnly": false
+}
